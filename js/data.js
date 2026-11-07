@@ -2,7 +2,10 @@
 (function () {
   "use strict";
   const CFG = window.DONDE_CONFIG || {};
-  const FB = CFG.FIREBASE || {};
+  // Acepta también el bloque tal cual lo da Firebase: const firebaseConfig = {...}
+  let pasted = null; try { pasted = typeof firebaseConfig !== "undefined" ? firebaseConfig : null; } catch (e) { }
+  const FB = (CFG.FIREBASE && CFG.FIREBASE.apiKey) ? CFG.FIREBASE : (pasted || CFG.FIREBASE || {});
+  const CONFIG_BROKEN = !window.DONDE_CONFIG && !pasted;
   const DEMO = !FB.apiKey || !FB.projectId;   // true = falta pegar la configuración de Firebase
   const EMAIL_DOMAIN = "dondeesta.app";
   const ADMIN_USER = "byalvaro";   // la única cuenta que es administradora (también en firestore.rules)
@@ -288,5 +291,5 @@
     }
   };
 
-  window.DE = { DEMO, db: FireBackend(), AI, uid, newCode, normUser, blobToDataURL };
+  window.DE = { DEMO, CONFIG_BROKEN, db: FireBackend(), AI, uid, newCode, normUser, blobToDataURL };
 })();

@@ -1,12 +1,13 @@
 /* ¿DÓNDE ESTÁ? · interfaz · HECHO POR @BYALVARO__ */
 (function () {
   "use strict";
-  const { db, AI, DEMO, newCode } = window.DE;
+  const { db, AI, DEMO, CONFIG_BROKEN, newCode } = window.DE;
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const COLORS = ["#8b5cf6", "#ef4444", "#f97316", "#f59e0b", "#22c55e", "#14b8a6", "#06b6d4", "#3b82f6", "#ec4899", "#64748b"];
-  const CACHE = "de_cache_v1";
+  const CACHE = "de_cache_v2", VERSION = "1.0.1";
+  ["de_cache_v1", "de_demo_v1", "de_demo_v2", "de_demo_session"].forEach(k => { try { localStorage.removeItem(k); } catch (e) { } });
 
   /* ---------- iconos ---------- */
   const P = {
@@ -210,7 +211,9 @@
   async function boot() {
     if (DEMO) {
       $("#app").innerHTML = '<div class="auth"><div class="auth-card stack" style="text-align:center"><div class="brand"><span class="logo">' + ic("box") + '</span><span>¿Dónde está?</span></div>' +
-        '<div class="err-box">Falta conectar la base de datos.</div><p class="muted" style="margin:0">Pega la configuración de tu proyecto de Firebase en <b>js/config.js</b> (README, paso 4) y recarga la página.</p><div class="byline">HECHO POR <span>@BYALVARO__</span></div></div></div>';
+        (CONFIG_BROKEN ? '<div class="err-box">El archivo js/config.js tiene un error.</div><p class="muted" style="margin:0">Pega solo el bloque <b>const firebaseConfig = { … };</b> que te da Firebase, sin las líneas de <b>import</b> ni <b>initializeApp</b>.</p>'
+          : '<div class="err-box">Falta conectar la base de datos.</div><p class="muted" style="margin:0">Pega la configuración de tu proyecto de Firebase en <b>js/config.js</b> (README, paso 4) y recarga la página.</p>') +
+        '<div class="byline">HECHO POR <span>@BYALVARO__</span> · v' + VERSION + '</div></div></div>';
       return;
     }
     try { const c = JSON.parse(localStorage.getItem(CACHE)); if (c && c.me && c.data) { S.me = c.me; S.data = c.data; index(); render(); } } catch (e) { }
@@ -269,7 +272,7 @@
     if (pend) { const a = $('.nav-a[data-nav="sacar"]'); if (a) a.insertAdjacentHTML("beforeend", '<span class="count">' + pend + "</span>"); const b = $('.bottomnav [data-nav="sacar"]'); if (b) b.insertAdjacentHTML("beforeend", '<i class="dot"></i>'); }
     const views = { "": vHome, e: vShelf, c: vBox, plano: vMap, sacar: vNotes, etiquetas: vLabels, ajustes: vSettings };
     const fn = views[r.p] || vHome;
-    v.innerHTML = fn(r.a) + '<div class="foot-by">HECHO POR <span>@BYALVARO__</span></div>';
+    v.innerHTML = fn(r.a) + '<div class="foot-by">HECHO POR <span>@BYALVARO__</span> · v' + VERSION + '</div>';
     const after = AFTER[r.p || "home"]; if (after) after(r.a, soft);
   }
   const AFTER = {};
