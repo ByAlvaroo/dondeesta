@@ -158,7 +158,20 @@
     const s = IX.shelf[b.shelf_id], c = boxColor(b);
     return '<span class="loc" role="link" data-go="#/c/' + esc(b.code) + '" style="cursor:pointer"><span class="s"><i class="sw chip" style="background:' + shelfColor(s) + ';width:9px;height:9px;padding:0;border:0;border-radius:50%"></i>' + esc(s ? s.name : "Sin estantería") + '</span><span class="b" style="background:' + c + '">' + esc(b.label) + "</span></span>";
   }
-  function thumb(it) { return it.photo_url ? '<img loading="lazy" src="' + esc(it.photo_url) + '" alt="">' : esc((it.name || "?").trim()[0] || "?").toUpperCase(); }
+  // Fotos: en la nube se guardan como "photo:<id>" y se cargan aparte (rápido y gratis)
+  function imgTag(url, attrs) {
+    if (!url) return "";
+    const ready = db.cachedPhoto ? db.cachedPhoto(url) : url;
+    return ready ? '<img src="' + esc(ready) + '" ' + (attrs || "") + ' alt="">' : '<img data-photo="' + esc(url) + '" ' + (attrs || "") + ' alt="">';
+  }
+  function hydratePhotos(root) {
+    $$("img[data-photo]", root || document).forEach(im => {
+      const u = im.getAttribute("data-photo"); im.removeAttribute("data-photo");
+      Promise.resolve(db.getPhoto ? db.getPhoto(u) : u).then(src => { if (src) im.src = src; });
+    });
+  }
+  new MutationObserver(() => { if (document.querySelector("img[data-photo]")) hydratePhotos(); }).observe(document.body, { childList: true, subtree: true });
+  function thumb(it) { return it.photo_url ? imgTag(it.photo_url, 'loading="lazy"') : esc((it.name || "?").trim()[0] || "?").toUpperCase(); }
 
   /* ---------- imágenes ---------- */
   function loadImage(file) { return new Promise((res, rej) => { const u = URL.createObjectURL(file), im = new Image(); im.onload = () => { URL.revokeObjectURL(u); res(im); }; im.onerror = () => rej(new Error("No se pudo leer la imagen")); im.src = u; }); }
@@ -173,7 +186,11 @@
   function pickFile(capture) {
     return new Promise(res => { const i = document.createElement("input"); i.type = "file"; i.accept = "image/*"; if (capture) i.capture = "environment"; i.onchange = () => res(i.files[0] || null); i.click(); });
   }
-  async function uploadPhoto(file) { const img = await compress(file, DEMO ? 500 : 1200, DEMO ? 0.7 : 0.82); return await db.uploadPhoto(img.blob); }
+  async function uploadPhoto(file) {
+    let img = await compress(file, DEMO ? 500 : 900, DEMO ? 0.7 : 0.72);
+    if (img.url.length > 900000) img = await compress(file, 640, 0.6);
+    return await db.uploadPhoto(img.blob);
+  }
 
   /* ---------- mutaciones ---------- */
   function setRow(t, row) { const arr = S.data[t]; const i = arr.findIndex(x => x.id === row.id); if (i >= 0) arr[i] = row; else arr.push(row); index(); saveCache(); }
@@ -195,15 +212,16 @@
       S.me = await db.session();
       if (S.me && S.me.role !== "pendiente") { S.data = await db.loadAll(); index(); saveCache(); }
       render();
-      if (!DEMO) db.onChange(debounce(reload, 700));
+      if (!DEMO) db.onChange(liveReload);
     } catch (e) {
-      if (!S.me) { $("#app").innerHTML = '<div class="auth"><div class="auth-card"><div class="err-box">No se pudo conectar: ' + esc(e.message) + '</div><p class="muted">Revisa js/config.js y tu conexión.</p><button class="btn pri" onclick="location.reload()">Reintentar</button></div></div>'; }
+      if (!S.me) { $("#app").innerHTML = '<div class="auth"><div class="auth-card"><div class="err-box">No se pudo conectar: ' + esc(e.message) + '</div><p class="muted">Revisa la configuración de Firebase en js/config.js y tu conexión.</p><button class="btn pri" onclick="location.reload()">Reintentar</button></div></div>'; }
       else fail(e);
     }
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.me) reload(); });
     window.addEventListener("hashchange", () => { S.mapSel = null; renderView(); window.scrollTo(0, 0); });
   }
   function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
+  const liveReload = debounce(() => reload(), 400);
   async function reload() {
     if (!S.me) return;
     try {
@@ -243,7 +261,7 @@
     const pend = S.data.notes.filter(n => !n.done).length;
     $$('.nav-a[data-nav="sacar"] .count, .bottomnav .dot').forEach(x => x.remove());
     if (pend) { const a = $('.nav-a[data-nav="sacar"]'); if (a) a.insertAdjacentHTML("beforeend", '<span class="count">' + pend + "</span>"); const b = $('.bottomnav [data-nav="sacar"]'); if (b) b.insertAdjacentHTML("beforeend", '<i class="dot"></i>'); }
-    const demo = DEMO ? '<div class="demo-bar">' + ic("info") + "<span>Modo demo: los datos solo se guardan en este navegador. Conecta Supabase (README) para usarlo en todos tus dispositivos.</span></div>" : "";
+    const demo = DEMO ? '<div class="demo-bar">' + ic("info") + "<span>Modo demo: los datos solo se guardan en este navegador. Conecta Firebase (README) para usarlo en todos tus dispositivos.</span></div>" : "";
     const views = { "": vHome, e: vShelf, c: vBox, plano: vMap, sacar: vNotes, etiquetas: vLabels, ajustes: vSettings };
     const fn = views[r.p] || vHome;
     v.innerHTML = demo + fn(r.a) + '<div class="foot-by">HECHO POR <span>@BYALVARO__</span></div>';
@@ -273,7 +291,7 @@
         const u = f.username.value, p = f.password.value;
         S.me = mode === "in" ? await db.signIn(u, p) : await db.signUp(u, p);
         if (S.me && S.me.role !== "pendiente") { S.data = await db.loadAll(); index(); saveCache(); }
-        if (!DEMO) db.onChange(debounce(reload, 700));
+        if (!DEMO) db.onChange(liveReload);
         render();
       } catch (err) { er.textContent = err.message; er.classList.remove("hidden"); btn.disabled = false; }
     };
@@ -294,6 +312,7 @@
       '<button class="aibtn ' + (S.aiLoading ? "loading" : "") + '" data-act="aisearch" title="Buscar con IA: describe lo que necesitas">' + ic("sparkles") + "<span>Buscar con IA</span></button></div>" +
       '<div class="stats"><div class="stat">' + ic("shelf") + "<b>" + d.shelves.length + "</b><span>estanterías</span></div><div class=\"stat\">" + ic("box") + "<b>" + d.boxes.length + "</b><span>cajas</span></div><div class=\"stat\">" + ic("tag") + "<b>" + nItems + "</b><span>objetos</span></div></div></section>" +
       '<div id="results"></div><div id="homebody">' +
+      (!d.shelves.length && !d.boxes.length ? '<section class="sec welcome"><h2>Empieza en 3 pasos</h2><div class="steps"><div class="stepc"><b>1</b><span>Crea una estantería<small>«Estantería 1», «Roja», «Metálica»…</small></span></div><div class="stepc"><b>2</b><span>Añade sus cajas<small>Con número, letra o texto</small></span></div><div class="stepc"><b>3</b><span>Apunta lo que hay dentro<small>Escribiendo o con una foto (IA)</small></span></div></div><button class="btn pri" data-act="newshelf" style="height:50px;margin-top:6px">' + ic("plus") + "Crear mi primera estantería</button></section>" : "") +
       (pend.length ? '<section class="sec"><div class="sec-h"><h2>Para sacar · ' + pend.length + '</h2><a class="btn sm ghost" href="#/sacar">Ver lista</a></div><div class="stack" style="gap:8px">' + pend.slice(0, 3).map(noteRow).join("") + "</div></section>" : "") +
       '<section class="sec"><div class="sec-h"><h2>Estanterías</h2><a class="btn sm ghost" href="#/plano">' + ic("map") + "Ver plano</a></div><div class=\"shelves\">" +
       d.shelves.map(shelfCard).join("") +
@@ -411,11 +430,12 @@
     const shs = S.data.shelves.map(s => {
       const c = shelfColor(s), n = (IX.boxesByShelf[s.id] || []).length;
       const vert = s.h > s.w * 1.4, fs = o.mini ? Math.min(52, (vert ? s.w : s.h) * 0.6) : Math.max(11, Math.min(22, (vert ? s.w : s.h) * 0.34));
+      const label = o.mini ? s.name : s.name + " · " + n, fsFit = Math.min(fs, ((vert ? s.h : s.w) - 12) / (Math.max(3, label.length) * 0.6));
       const showTxt = !o.mini || !hlSet.size || hlSet.has(s.id);
       const cls = "sh" + (hlSet.size ? (hlSet.has(s.id) ? " hl" : " dim") : "") + (S.mapSel === s.id ? " sel" : "");
       const cx = s.w / 2, cy = s.h / 2;
       return '<g class="' + cls + '" data-shelf="' + s.id + '" transform="translate(' + s.x + " " + s.y + ')"><rect class="body" width="' + s.w + '" height="' + s.h + '" rx="8" fill="' + c + '" fill-opacity="' + (hlSet.has(s.id) ? 1 : .82) + '" stroke="' + (S.mapSel === s.id ? "#fff" : c) + '"/>' +
-        (showTxt ? '<text x="' + cx + '" y="' + cy + '" text-anchor="middle" dominant-baseline="central" font-size="' + fs + '"' + (vert ? ' transform="rotate(-90 ' + cx + " " + cy + ')"' : "") + ">" + esc(s.name) + (o.mini ? "" : " · " + n) + "</text>" : "") +
+        (showTxt ? '<text x="' + cx + '" y="' + cy + '" text-anchor="middle" dominant-baseline="central" font-size="' + fsFit.toFixed(1) + '"' + (vert ? ' transform="rotate(-90 ' + cx + " " + cy + ')"' : "") + ">" + esc(label) + "</text>" : "") +
         (o.edit ? '<rect class="handle" data-h="1" x="' + (s.w - 9) + '" y="' + (s.h - 9) + '" width="18" height="18" rx="5"/>' : "") + "</g>";
     }).join("");
     return '<div class="mapwrap"><svg class="map ' + (o.edit ? "edit" : "") + '" id="' + (o.id || "") + '" viewBox="-10 -10 ' + (W + 20) + " " + (H + 20) + '" preserveAspectRatio="xMidYMid meet"><rect class="floor" x="0" y="0" width="' + W + '" height="' + H + '" rx="14"/>' + g + shs + "</svg></div>";
@@ -619,7 +639,7 @@
   }
   function itemModal(it) {
     let photo = it.photo_url, newFile = null;
-    const pv = () => photo ? '<img src="' + esc(photo) + '">' : ic("image");
+    const pv = () => photo ? imgTag(photo) : ic("image");
     openModal({
       title: "Objeto",
       body: '<div class="field"><label>Nombre</label><input class="inp" id="m_name" value="' + esc(it.name) + '"></div>' +
@@ -638,6 +658,7 @@
           try {
             let url = photo;
             if (newFile) url = await uploadPhoto(newFile);
+            if (it.photo_url && it.photo_url !== url) db.deletePhoto(it.photo_url);
             const patch = { name: $("#m_name", ov).value.trim() || it.name, qty: Math.max(0, parseInt($("#m_qty", ov).value) || 0), box_id: $("#m_box", ov).value, description: $("#m_desc", ov).value.trim(), photo_url: url || null };
             const moved = patch.box_id !== it.box_id;
             await upd("items", it.id, patch); close(); renderView();
@@ -798,11 +819,12 @@
     },
     async itemphoto(d) {
       const it = IX.item[d.id]; const f = await pickFile(true); if (!f) return;
-      try { const url = await uploadPhoto(f); await upd("items", it.id, { photo_url: url }); renderView(); toast("Foto guardada"); } catch (e) { fail(e); }
+      const wt = toast("Guardando foto…", { wait: true });
+      try { const old = it.photo_url, url = await uploadPhoto(f); await upd("items", it.id, { photo_url: url }); if (old) db.deletePhoto(old); wt.remove(); renderView(); toast("Foto guardada"); } catch (e) { wt.remove(); fail(e); }
     },
     viewphoto(d) {
       const it = IX.item[d.id];
-      openModal({ title: esc(it.name), body: '<img src="' + esc(it.photo_url) + '" style="width:100%;border-radius:16px;max-height:65vh;object-fit:contain;background:#000">',
+      openModal({ title: esc(it.name), body: imgTag(it.photo_url, 'style="width:100%;border-radius:16px;max-height:65vh;object-fit:contain;background:#000"'),
         foot: '<button class="btn" data-ch>' + ic("camera") + 'Cambiar foto</button><button class="btn pri" data-ed>' + ic("edit") + "Editar</button>",
         onMount(ov, close) { $("[data-ch]", ov).onclick = () => { close(); A.itemphoto(d); }; $("[data-ed]", ov).onclick = () => { close(); itemModal(it); }; } });
     },

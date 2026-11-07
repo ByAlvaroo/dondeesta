@@ -1,9 +1,12 @@
-/* ¿DÓNDE ESTÁ? · datos (Supabase o modo demo) + IA · HECHO POR @BYALVARO__ */
+/* ¿DÓNDE ESTÁ? · datos (Firebase o modo demo) + IA · HECHO POR @BYALVARO__ */
 (function () {
   "use strict";
   const CFG = window.DONDE_CONFIG || {};
-  const DEMO = !CFG.SUPABASE_URL || !CFG.SUPABASE_ANON_KEY;
+  const FB = CFG.FIREBASE || {};
+  const DEMO = !FB.apiKey || !FB.projectId;
   const EMAIL_DOMAIN = "dondeesta.app";
+  const SDK = CFG.FIREBASE_SDK || "https://www.gstatic.com/firebasejs/11.0.2/";
+  const COLS = ["shelves", "boxes", "items", "notes"];
 
   const uid = () => (crypto.randomUUID ? crypto.randomUUID()
     : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 3 | 8)).toString(16); }));
@@ -11,16 +14,22 @@
   function newCode() { let s = ""; const a = new Uint32Array(6); crypto.getRandomValues(a); for (const n of a) s += ALPHA[n % ALPHA.length]; return s; }
   function normUser(u) { return String(u || "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9._-]/g, ""); }
   const now = () => new Date().toISOString();
+  const DEFAULT_SETTINGS = { ai_provider: "gemini", ai_model: "", ai_key: "", ai_base_url: "", map_w: 800, map_h: 500, map_name: "Mi bajo" };
+  function checkCreds(name, pass) {
+    if (name.length < 3) throw new Error("El usuario debe tener al menos 3 letras o números");
+    if (String(pass).length < 6) throw new Error("La contraseña debe tener al menos 6 caracteres");
+  }
 
   /* =================== MODO DEMO (localStorage) =================== */
   function LocalBackend() {
-    const KEY = "de_demo_v1", SKEY = "de_demo_session";
+    const KEY = "de_demo_v2", SKEY = "de_demo_session";
     let db;
     try { db = JSON.parse(localStorage.getItem(KEY)); } catch (e) { db = null; }
-    if (!db) db = seed();
-    const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { console.warn(e); } };
+    if (!db) db = { users: [], shelves: [], boxes: [], items: [], notes: [], settings: Object.assign({ id: 1 }, DEFAULT_SETTINGS) };
+    const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { console.warn(e); throw new Error("No queda espacio en este navegador (modo demo)"); } };
     save();
     const strip = u => u && ({ id: u.id, username: u.username, role: u.role, created_at: u.created_at });
+    const clone = o => JSON.parse(JSON.stringify(o));
     return {
       demo: true,
       async session() { const id = localStorage.getItem(SKEY); return strip(db.users.find(u => u.id === id)); },
@@ -30,21 +39,17 @@
         localStorage.setItem(SKEY, u.id); return strip(u);
       },
       async signUp(user, pass) {
-        const name = normUser(user);
-        if (name.length < 3) throw new Error("El usuario debe tener al menos 3 letras o números");
-        if (String(pass).length < 6) throw new Error("La contraseña debe tener al menos 6 caracteres");
+        const name = normUser(user); checkCreds(name, pass);
         if (db.users.some(x => x.username === name)) throw new Error("Ese usuario ya existe");
         const u = { id: uid(), username: name, pass, role: db.users.length ? "pendiente" : "admin", created_at: now() };
         db.users.push(u); save(); localStorage.setItem(SKEY, u.id); return strip(u);
       },
       async signOut() { localStorage.removeItem(SKEY); },
-      async loadAll() {
-        return JSON.parse(JSON.stringify({ shelves: db.shelves, boxes: db.boxes, items: db.items, notes: db.notes, settings: db.settings }));
-      },
-      async insert(t, row) { const r = Object.assign({ id: uid(), created_at: now() }, row); db[t].push(r); save(); return JSON.parse(JSON.stringify(r)); },
+      async loadAll() { return clone({ shelves: db.shelves, boxes: db.boxes, items: db.items, notes: db.notes, settings: db.settings }); },
+      async insert(t, row) { const r = Object.assign({ id: uid(), created_at: now() }, row); db[t].push(r); save(); return clone(r); },
       async update(t, id, patch) {
         const r = db[t].find(x => x.id === id); if (!r) throw new Error("No encontrado");
-        Object.assign(r, patch); save(); return JSON.parse(JSON.stringify(r));
+        Object.assign(r, patch); save(); return clone(r);
       },
       async remove(t, id) {
         db[t] = db[t].filter(x => x.id !== id);
@@ -55,129 +60,195 @@
       },
       async upsertMany(t, rows) { const ids = new Set(rows.map(r => r.id)); db[t] = db[t].filter(r => !ids.has(r.id)).concat(rows); save(); },
       async uploadPhoto(blob) { return await blobToDataURL(blob); },
+      async getPhoto(url) { return url; },
+      async deletePhoto() { },
       async listProfiles() { return db.users.map(strip); },
       async setRole(id, role) { const u = db.users.find(x => x.id === id); if (u) u.role = role; save(); },
       async deleteProfile(id) { db.users = db.users.filter(u => u.id !== id); save(); },
-      async saveSettings(patch) { Object.assign(db.settings, patch); save(); return db.settings; },
-      onChange() {}
+      async saveSettings(patch) { Object.assign(db.settings, patch); save(); return clone(db.settings); },
+      onChange() { }
     };
   }
 
-  function seed() {
-    const S = (name, color, x, y, w, h) => ({ id: uid(), name, color, x, y, w, h, position: 0, created_at: now() });
-    const roja = S("Estantería Roja", "#ef4444", 40, 40, 260, 60);
-    const azul = S("Estantería Azul", "#3b82f6", 40, 400, 260, 60);
-    const metal = S("Metálica del fondo", "#64748b", 700, 120, 60, 280);
-    const B = (shelf, label, notes) => ({ id: uid(), shelf_id: shelf.id, label, code: newCode(), color: null, notes: notes || "", position: 0, updated_at: now(), created_at: now() });
-    const b1 = B(roja, "A1", "Ropa de invierno"), b2 = B(roja, "A2"), b3 = B(roja, "Navidad"),
-      b4 = B(azul, "B1", "Juegos y electrónica"), b5 = B(azul, "B2"), b6 = B(metal, "Herramientas"), b7 = B(metal, "C3");
-    const I = (box, name, qty, description) => ({ id: uid(), box_id: box.id, name, qty, description: description || "", photo_url: null, updated_at: now(), created_at: now() });
-    const items = [
-      I(b1, "Calentadores de manos desechables", 12, "Sobres Thermopad, duran 8 h"),
-      I(b1, "Bolsa de agua caliente", 2, "Una con funda de punto"),
-      I(b1, "Bufandas", 4, "Lana, colores variados"),
-      I(b1, "Guantes de esquí", 2, "Talla M"),
-      I(b2, "Cables HDMI", 5, "1,5 m y 3 m"),
-      I(b2, "Cargadores USB-C", 3), I(b2, "Ladrón / regleta", 2, "6 enchufes con interruptor"),
-      I(b2, "Pilas AA", 16, "Recargables Eneloop"),
-      I(b3, "Luces LED de Navidad", 3, "Tiras de 10 m, luz cálida"), I(b3, "Bolas del árbol", 40, "Rojas y doradas"), I(b3, "Belén", 1, "Figuras de cerámica"),
-      I(b4, "Consola PS4 con mando", 1, "Con cables"),
-      I(b4, "Juego de mesa Catan", 1, "Completo"),
-      I(b4, "Cargador del patinete", 1),
-      I(b5, "Tienda de campaña", 1, "4 personas, Quechua"), I(b5, "Sacos de dormir", 2), I(b5, "Linterna frontal", 2, "Con pilas AAA"),
-      I(b6, "Taladro percutor", 1, "Bosch, con maletín"), I(b6, "Juego de destornilladores", 1), I(b6, "Cinta americana", 3),
-      I(b7, "Bombillas E27", 6, "LED 9W"), I(b7, "Alargador de 10 m", 1)
-    ];
-    return {
-      users: [], shelves: [roja, azul, metal], boxes: [b1, b2, b3, b4, b5, b6, b7], items,
-      notes: [{ id: uid(), text: "Bolsa de agua caliente", item_id: items[1].id, done: false, created_by: "demo", created_at: now() },
-        { id: uid(), text: "Sacar la tienda para el finde", item_id: null, done: false, created_by: "demo", created_at: now() }],
-      settings: { id: 1, ai_provider: "gemini", ai_model: "", ai_key: "", ai_base_url: "", map_w: 800, map_h: 500, map_name: "Mi bajo" }
-    };
-  }
+  /* =================== FIREBASE (nube gratis, siempre activa) =================== */
+  function FireBackend() {
+    let F = null;                       // { A, S, auth, fs }
+    const live = { started: false, ready: null, data: {}, settings: null, unsubs: [], cbs: [], initial: 0 };
+    const photoCache = new Map();
 
-  /* =================== SUPABASE =================== */
-  function SupaBackend() {
-    let sb = null;
-    async function client() {
-      if (sb) return sb;
-      const mod = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm");
-      sb = mod.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
-      return sb;
+    async function fb() {
+      if (F) return F;
+      const [mApp, mAuth, mFs] = await Promise.all([import(SDK + "firebase-app.js"), import(SDK + "firebase-auth.js"), import(SDK + "firebase-firestore.js")]);
+      const app = mApp.initializeApp(FB);
+      const auth = mAuth.getAuth(app);
+      let fs;
+      try { fs = mFs.initializeFirestore(app, { ignoreUndefinedProperties: true, localCache: mFs.persistentLocalCache({ tabManager: mFs.persistentMultipleTabManager() }) }); }
+      catch (e) { fs = mFs.initializeFirestore(app, { ignoreUndefinedProperties: true }); }
+      F = { A: mAuth, S: mFs, auth, fs };
+      return F;
     }
-    const chk = r => { if (r.error) throw tr(r.error); return r.data; };
     function tr(e) {
-      const m = (e && (e.message || e.error_description)) || String(e);
-      if (/Invalid login/i.test(m)) return new Error("Usuario o contraseña incorrectos");
-      if (/already registered|already exists/i.test(m)) return new Error("Ese usuario ya existe");
-      if (/Password should be/i.test(m)) return new Error("La contraseña debe tener al menos 6 caracteres");
-      if (/Email not confirmed/i.test(m)) return new Error("En Supabase tienes activado «Confirm email». Desactívalo (ver README, paso 3).");
-      if (/row-level security|permission denied/i.test(m)) return new Error("No tienes permiso para hacer eso");
-      if (/rate limit/i.test(m)) return new Error("Demasiados intentos, espera un momento");
+      const c = (e && e.code) || "", m = (e && e.message) || String(e);
+      if (/invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)) return new Error("Usuario o contraseña incorrectos");
+      if (/email-already-in-use/.test(c)) return new Error("Ese usuario ya existe");
+      if (/weak-password/.test(c)) return new Error("La contraseña debe tener al menos 6 caracteres");
+      if (/too-many-requests/.test(c)) return new Error("Demasiados intentos, espera un momento");
+      if (/operation-not-allowed/.test(c)) return new Error("En Firebase falta activar «Correo electrónico/contraseña» (README, paso 2)");
+      if (/permission-denied/.test(c)) return new Error("No tienes permiso para hacer eso");
+      if (/network-request-failed|unavailable/.test(c)) return new Error("Sin conexión con la nube. Revisa internet.");
+      if (/api-key-not-valid|invalid-api-key/.test(c) || /api-key/.test(m)) return new Error("La configuración de Firebase en js/config.js no es correcta");
       return new Error(m);
     }
-    async function profile(id) {
-      const c = await client();
-      const r = await c.from("profiles").select("*").eq("id", id).maybeSingle();
-      return chk(r);
+    const wrap = fn => async function () { try { return await fn.apply(this, arguments); } catch (e) { throw tr(e); } };
+    const d = (t, id) => F.S.doc(F.fs, t, id);
+    const clean = o => { const r = {}; for (const k in o) if (o[k] !== undefined && k[0] !== "_") r[k] = o[k]; return r; };
+
+    async function profile(u) {
+      const s = await F.S.getDoc(d("profiles", u.uid));
+      return s.exists() ? Object.assign({ id: u.uid }, s.data()) : null;
     }
-    return {
+    // Crea el perfil: el primer usuario de todos es admin; el resto, pendiente.
+    async function createProfile(u, name) {
+      const setup = await F.S.getDoc(d("meta", "setup"));
+      const b = F.S.writeBatch(F.fs);
+      const first = !setup.exists();
+      const p = { username: name, role: first ? "admin" : "pendiente", created_at: now() };
+      b.set(d("profiles", u.uid), p);
+      if (first) b.set(d("meta", "setup"), { admin: u.uid, created_at: now() });
+      try { await b.commit(); }
+      catch (e) { if (!first) throw e; p.role = "pendiente"; await F.S.setDoc(d("profiles", u.uid), p); }
+      return Object.assign({ id: u.uid }, p);
+    }
+
+    function stopLive() { live.unsubs.forEach(u => { try { u(); } catch (e) { } }); Object.assign(live, { started: false, ready: null, data: {}, settings: null, unsubs: [], initial: 0 }); }
+    function startLive() {
+      if (live.started) return live.ready;
+      live.started = true;
+      let pending = COLS.length + 1, done;
+      live.ready = new Promise((res, rej) => { done = res; live.fail = rej; });
+      const fire = () => { live.cbs.forEach(cb => { try { cb(); } catch (e) { } }); };
+      const first = () => { if (--pending === 0) done(); };
+      COLS.forEach(t => {
+        live.data[t] = new Map(); let init = true;
+        live.unsubs.push(F.S.onSnapshot(F.S.collection(F.fs, t), snap => {
+          snap.docChanges().forEach(ch => { if (ch.type === "removed") live.data[t].delete(ch.doc.id); else live.data[t].set(ch.doc.id, Object.assign({ id: ch.doc.id }, ch.doc.data())); });
+          if (init) { init = false; first(); } else fire();
+        }, err => { console.warn(t, err); if (init) { init = false; live.fail(tr(err)); } }));
+      });
+      let sInit = true;
+      live.unsubs.push(F.S.onSnapshot(d("settings", "main"), snap => {
+        live.settings = snap.exists() ? snap.data() : null;
+        if (sInit) { sInit = false; first(); } else fire();
+      }, err => { console.warn(err); if (sInit) { sInit = false; first(); } }));
+      return live.ready;
+    }
+    const sortc = arr => arr.sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
+
+    const api = {
       demo: false,
-      async session() {
-        const c = await client();
-        const { data } = await c.auth.getSession();
-        if (!data.session) return null;
-        const pr = await profile(data.session.user.id);
-        if (!pr) await c.auth.signOut();
-        return pr;
+      session: wrap(async function () {
+        await fb(); await F.auth.authStateReady();
+        const u = F.auth.currentUser; if (!u) return null;
+        const p = await profile(u);
+        if (p) return p;
+        return await createProfile(u, normUser((u.email || "").split("@")[0]));
+      }),
+      signIn: wrap(async function (user, pass) {
+        await fb();
+        const r = await F.A.signInWithEmailAndPassword(F.auth, normUser(user) + "@" + EMAIL_DOMAIN, pass);
+        return (await profile(r.user)) || (await createProfile(r.user, normUser(user)));
+      }),
+      signUp: wrap(async function (user, pass) {
+        const name = normUser(user); checkCreds(name, pass);
+        await fb();
+        const r = await F.A.createUserWithEmailAndPassword(F.auth, name + "@" + EMAIL_DOMAIN, pass);
+        return await createProfile(r.user, name);
+      }),
+      signOut: wrap(async function () { await fb(); stopLive(); photoCache.clear(); await F.A.signOut(F.auth); }),
+      loadAll: wrap(async function () {
+        await fb(); await startLive();
+        let st = live.settings;
+        if (!st) { st = Object.assign({}, DEFAULT_SETTINGS); try { await F.S.setDoc(d("settings", "main"), st, { merge: true }); } catch (e) { /* solo el admin puede crearlo */ } }
+        const out = { settings: Object.assign({ id: 1 }, DEFAULT_SETTINGS, st) };
+        COLS.forEach(t => out[t] = sortc(Array.from(live.data[t].values()).map(x => Object.assign({}, x))));
+        return out;
+      }),
+      insert: wrap(async function (t, row) {
+        await fb();
+        const r = clean(Object.assign({ id: uid(), created_at: now() }, row));
+        await F.S.setDoc(d(t, r.id), r);
+        return r;
+      }),
+      update: wrap(async function (t, id, patch) {
+        await fb();
+        patch = clean(patch);
+        await F.S.updateDoc(d(t, id), patch);
+        const cur = live.data[t] && live.data[t].get(id);
+        return Object.assign({ id }, cur || (await F.S.getDoc(d(t, id))).data(), patch);
+      }),
+      remove: wrap(async function (t, id) {
+        await fb();
+        const b = F.S.writeBatch(F.fs); let n = 0;
+        const add = fn => { fn(); n++; };
+        const items = live.data.items ? Array.from(live.data.items.values()) : [];
+        const notes = live.data.notes ? Array.from(live.data.notes.values()) : [];
+        const dropItem = it => {
+          add(() => b.delete(d("items", it.id)));
+          if (it.photo_url && String(it.photo_url).startsWith("photo:")) add(() => b.delete(d("photos", it.photo_url.slice(6))));
+          notes.filter(x => x.item_id === it.id).forEach(x => add(() => b.update(d("notes", x.id), { item_id: null })));
+        };
+        if (t === "items") { const it = live.data.items.get(id) || { id }; dropItem(it); }
+        else {
+          add(() => b.delete(d(t, id)));
+          if (t === "boxes") items.filter(i => i.box_id === id).forEach(dropItem);
+          if (t === "shelves") Array.from(live.data.boxes.values()).filter(x => x.shelf_id === id).forEach(x => add(() => b.update(d("boxes", x.id), { shelf_id: null })));
+        }
+        if (n > 480) throw new Error("Demasiados cambios a la vez; vacía la caja por partes");
+        await b.commit();
+      }),
+      upsertMany: wrap(async function (t, rows) {
+        await fb();
+        for (let i = 0; i < rows.length; i += 400) {
+          const b = F.S.writeBatch(F.fs);
+          rows.slice(i, i + 400).forEach(r => b.set(d(t, r.id), clean(r)));
+          await b.commit();
+        }
+      }),
+      uploadPhoto: wrap(async function (blob) {
+        await fb();
+        const data = await blobToDataURL(blob);
+        if (data.length > 950000) throw new Error("La foto es demasiado grande");
+        const id = uid();
+        await F.S.setDoc(d("photos", id), { data, created_at: now() });
+        photoCache.set(id, data);
+        return "photo:" + id;
+      }),
+      async getPhoto(url) {
+        if (!url || !String(url).startsWith("photo:")) return url;
+        const id = url.slice(6);
+        if (photoCache.has(id)) return photoCache.get(id);
+        const p = (async () => { await fb(); const s = await F.S.getDoc(d("photos", id)); return s.exists() ? s.data().data : ""; })();
+        photoCache.set(id, p);
+        const v = await p.catch(() => ""); photoCache.set(id, v); return v;
       },
-      async signIn(user, pass) {
-        const c = await client();
-        const r = await c.auth.signInWithPassword({ email: normUser(user) + "@" + EMAIL_DOMAIN, password: pass });
-        chk(r); const pr = await profile(r.data.user.id);
-        if (!pr) { await c.auth.signOut(); throw new Error("Esta cuenta fue eliminada por el administrador"); }
-        return pr;
+      cachedPhoto(url) { if (!url || !String(url).startsWith("photo:")) return url; const v = photoCache.get(url.slice(6)); return typeof v === "string" ? v : null; },
+      async deletePhoto(url) {
+        if (!url || !String(url).startsWith("photo:")) return;
+        try { await fb(); await F.S.deleteDoc(d("photos", url.slice(6))); photoCache.delete(url.slice(6)); } catch (e) { console.warn(e); }
       },
-      async signUp(user, pass) {
-        const name = normUser(user);
-        if (name.length < 3) throw new Error("El usuario debe tener al menos 3 letras o números");
-        const c = await client();
-        const r = await c.auth.signUp({ email: name + "@" + EMAIL_DOMAIN, password: pass, options: { data: { username: name } } });
-        chk(r);
-        if (!r.data.session) throw new Error("Cuenta creada, pero Supabase pide confirmar el email. Desactiva «Confirm email» (README, paso 3) y entra.");
-        return await profile(r.data.user.id);
-      },
-      async signOut() { const c = await client(); await c.auth.signOut(); },
-      async loadAll() {
-        const c = await client();
-        const [s, b, i, n, st] = await Promise.all([
-          c.from("shelves").select("*").order("created_at"),
-          c.from("boxes").select("*").order("created_at"),
-          c.from("items").select("*").order("created_at"),
-          c.from("notes").select("*").order("created_at"),
-          c.from("settings").select("*").eq("id", 1).maybeSingle()
-        ]);
-        return { shelves: chk(s), boxes: chk(b), items: chk(i), notes: chk(n), settings: chk(st) || {} };
-      },
-      async insert(t, row) { const c = await client(); return chk(await c.from(t).insert(row).select().single()); },
-      async update(t, id, patch) { const c = await client(); return chk(await c.from(t).update(patch).eq("id", id).select().single()); },
-      async remove(t, id) { const c = await client(); chk(await c.from(t).delete().eq("id", id)); },
-      async upsertMany(t, rows) { if (!rows.length) return; const c = await client(); chk(await c.from(t).upsert(rows)); },
-      async uploadPhoto(blob) {
-        const c = await client(); const path = uid() + ".jpg";
-        chk(await c.storage.from("fotos").upload(path, blob, { contentType: "image/jpeg", cacheControl: "31536000" }));
-        return c.storage.from("fotos").getPublicUrl(path).data.publicUrl;
-      },
-      async listProfiles() { const c = await client(); return chk(await c.from("profiles").select("*").order("created_at")); },
-      async setRole(id, role) { const c = await client(); chk(await c.from("profiles").update({ role }).eq("id", id)); },
-      async deleteProfile(id) { const c = await client(); chk(await c.from("profiles").delete().eq("id", id)); },
-      async saveSettings(patch) { const c = await client(); return chk(await c.from("settings").update(patch).eq("id", 1).select().single()); },
-      async onChange(cb) {
-        if (this._sub) return; this._sub = true;
-        const c = await client();
-        c.channel("cambios").on("postgres_changes", { event: "*", schema: "public" }, () => cb()).subscribe();
-      }
+      listProfiles: wrap(async function () {
+        await fb(); const s = await F.S.getDocs(F.S.collection(F.fs, "profiles"));
+        return sortc(s.docs.map(x => Object.assign({ id: x.id }, x.data())));
+      }),
+      setRole: wrap(async function (id, role) { await fb(); await F.S.updateDoc(d("profiles", id), { role }); }),
+      deleteProfile: wrap(async function (id) { await fb(); await F.S.deleteDoc(d("profiles", id)); }),
+      saveSettings: wrap(async function (patch) {
+        await fb(); await F.S.setDoc(d("settings", "main"), clean(patch), { merge: true });
+        return Object.assign({ id: 1 }, DEFAULT_SETTINGS, live.settings || {}, patch);
+      }),
+      onChange(cb) { if (!live.cbs.includes(cb)) live.cbs.push(cb); }
     };
+    return api;
   }
 
   function blobToDataURL(blob) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); }); }
@@ -272,5 +343,5 @@
     }
   };
 
-  window.DE = { DEMO, db: DEMO ? LocalBackend() : SupaBackend(), AI, uid, newCode, normUser, blobToDataURL };
+  window.DE = { DEMO, db: DEMO ? LocalBackend() : FireBackend(), AI, uid, newCode, normUser, blobToDataURL };
 })();

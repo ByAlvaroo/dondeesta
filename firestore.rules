@@ -1,0 +1,49 @@
+rules_version = '2';
+// =====================================================================
+//  ¿DÓNDE ESTÁ? · Reglas de seguridad de Firestore
+//  Pega TODO este archivo en Firebase → Firestore Database → Reglas → Publicar.
+//  · El primer usuario que se registra es administrador.
+//  · Los demás quedan "pendientes" hasta que el admin los apruebe.
+//  · Solo los usuarios aprobados pueden ver o tocar estanterías, cajas, objetos y fotos.
+//  HECHO POR @BYALVARO__
+// =====================================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function profPath() { return /databases/$(database)/documents/profiles/$(request.auth.uid); }
+    function hasProfile() { return signedIn() && exists(profPath()); }
+    function role() { return get(profPath()).data.role; }
+    function member() { return hasProfile() && role() in ['admin', 'usuario']; }
+    function admin() { return hasProfile() && role() == 'admin'; }
+    function setupPath() { return /databases/$(database)/documents/meta/setup; }
+
+    match /profiles/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || member());
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['username', 'role', 'created_at'])
+        && request.resource.data.username is string
+        && (request.resource.data.role == 'pendiente'
+            || (request.resource.data.role == 'admin' && !exists(setupPath()) && existsAfter(setupPath())));
+      allow update: if admin() && request.resource.data.role in ['admin', 'usuario', 'pendiente'];
+      allow delete: if admin() && request.auth.uid != uid;
+    }
+
+    match /meta/setup {
+      allow read: if signedIn();
+      allow create: if signedIn() && !exists(setupPath())
+        && getAfter(profPath()).data.role == 'admin';
+    }
+
+    match /settings/{id} {
+      allow read: if member();
+      allow write: if admin();
+    }
+
+    match /shelves/{id} { allow read, write: if member(); }
+    match /boxes/{id}   { allow read, write: if member(); }
+    match /items/{id}   { allow read, write: if member(); }
+    match /notes/{id}   { allow read, write: if member(); }
+    match /photos/{id}  { allow read, write: if member(); }
+  }
+}

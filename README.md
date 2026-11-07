@@ -4,87 +4,86 @@ Inventario de tu bajo: estanterías → cajas → objetos. Busca cualquier cosa 
 
 **HECHO POR @BYALVARO__**
 
+La web vive en **GitHub Pages** y los datos en **Firebase** (de Google). Las dos cosas son **gratis, sin tarjeta y siempre activas**: no se duermen ni caducan por no usarlas.
+
 ---
 
 ## Qué tiene
 
 - **Estanterías y cajas** con etiqueta libre (`A1`, `3`, `Navidad`…) y colores.
 - **Objetos** con cantidad (botones − / + para lo que sacas o metes), descripción y **foto**.
-- **Buscador instantáneo** que ignora tildes y mayúsculas («calefaccion» encuentra «Calefacción»).
-- **Búsqueda con IA**: describe lo que necesitas («bolsas para calentarse en invierno») y te propone qué objetos pueden ser y en qué caja están. Si el buscador normal no encuentra nada, al pulsar Enter salta la IA sola.
+- **Fotos de cada producto**: botón de cámara al añadir, o toca la miniatura de un objeto.
+- **Buscador instantáneo** que ignora tildes y mayúsculas.
+- **Búsqueda con IA**: describe lo que necesitas («bolsas para calentarse en invierno») y te dice qué objetos pueden ser y en qué caja están. Si el buscador normal no encuentra nada, al pulsar Enter salta la IA sola.
 - **Foto → IA**: haz una foto al contenido de una caja y la IA lo apunta todo.
-- **Foto de cada producto**: botón de cámara al añadir, o toca la miniatura de un objeto.
 - **Plano del bajo**: coloca las estanterías como en la realidad; al buscar se ilumina dónde está.
-- **QR por caja**: se crean al instante (sin internet), se imprimen en hoja (pequeñas, medianas o grandes) y al escanear se abre la caja directamente. También hay escáner dentro de la app.
-- **Para sacar**: lista de notas; te dice en qué caja está cada cosa.
+- **QR por caja**: se crean al instante, se imprimen en hoja y al escanear se abre la caja directamente.
+- **Para sacar**: lista de notas que te dice en qué caja está cada cosa.
 - **Usuarios con contraseña**: el primero es administrador y aprueba a los demás. La IA se configura una vez para todos.
-- Se actualiza en **tiempo real** en todos los dispositivos. Copia de seguridad en JSON.
-
-Si abres la web **sin configurar Supabase**, arranca en **modo demo** (con datos de ejemplo, guardados solo en ese navegador) para que lo pruebes.
+- **Tiempo real**: lo que cambia uno aparece al momento en el resto de móviles y ordenadores.
+- **Empieza vacía**: al crear tu cuenta no hay nada; tú creas tus estanterías.
 
 ---
 
-## Puesta en marcha (unos 10 minutos, todo gratis)
+## Puesta en marcha (unos 10 minutos)
 
 ### 1. Sube la web a GitHub
 
 1. Entra en [github.com](https://github.com) → **New repository** → nombre `donde-esta` → **Public** → *Create repository*.
-2. Pulsa **uploading an existing file** y arrastra **todo el contenido** de esta carpeta (`index.html`, `css/`, `js/`, `supabase/`, etc.). *Commit changes*.
+2. Pulsa **uploading an existing file** y arrastra **todo el contenido** de esta carpeta (`index.html`, `css/`, `js/`, `firestore.rules`…). *Commit changes*.
 3. En el repositorio: **Settings → Pages** → *Source*: **Deploy from a branch** → Branch **main** / **(root)** → *Save*.
 4. En 1–2 minutos tendrás la web en `https://TU-USUARIO.github.io/donde-esta/`.
 
-Ya funciona en modo demo. Para que los datos se compartan entre dispositivos, sigue:
+### 2. Crea el proyecto de Firebase
 
-### 2. Crea la base de datos en Supabase
+1. Entra en [console.firebase.google.com](https://console.firebase.google.com) con tu cuenta de Google → **Crear un proyecto** → nombre `donde-esta` → puedes desactivar Google Analytics → *Crear*.
+2. Menú izquierdo **Compilación → Authentication** → *Comenzar* → **Correo electrónico/contraseña** → actívalo (solo el primer interruptor) → *Guardar*.
 
-1. Entra en [supabase.com](https://supabase.com) → *Start your project* (con tu cuenta de GitHub) → **New project** (región: *West EU*, pon una contraseña cualquiera a la base de datos).
-2. Cuando termine, ve a **SQL Editor → New query**, pega **todo** el archivo `supabase/schema.sql` y pulsa **Run**. Debe decir *Success*.
-3. Ve a **Project Settings → API** (o *Data API / API Keys*) y copia:
-   - **Project URL** (`https://xxxx.supabase.co`)
-   - **anon public key** (la larga que empieza por `eyJ…`, o la *publishable key* `sb_publishable_…`)
+### 3. Crea la base de datos y pon la seguridad
 
-### 3. Quita la confirmación por email
+1. **Compilación → Firestore Database** → *Crear base de datos* → ubicación **eur3 (Europa)** → **Modo de producción** → *Crear*.
+2. Pestaña **Reglas** → borra lo que hay, pega **todo** el archivo `firestore.rules` → **Publicar**.
 
-Los usuarios entran con **usuario y contraseña** (sin email), así que hay que desactivarla:
+### 4. Conecta la web con Firebase
 
-**Authentication → Sign In / Providers → Email** → desactiva **Confirm email** → *Save*.
-
-### 4. Conecta la web con Supabase
-
-En GitHub, abre `js/config.js` → icono del lápiz ✏️ → pega tus datos:
+1. Pulsa ⚙ (**Configuración del proyecto**) → abajo, **Tus apps** → icono **`</>`** (Web) → apodo `donde-esta` → *Registrar app* (no marques Hosting).
+2. Te enseña un bloque `const firebaseConfig = { apiKey: "...", ... }`. Cópialo.
+3. En GitHub abre `js/config.js` → lápiz ✏️ → rellena cada campo con lo que copiaste:
 
 ```js
 window.DONDE_CONFIG = {
-  SUPABASE_URL: "https://xxxx.supabase.co",
-  SUPABASE_ANON_KEY: "eyJhbGciOi..."
+  FIREBASE: {
+    apiKey: "AIzaSy...",
+    authDomain: "donde-esta-xxxx.firebaseapp.com",
+    projectId: "donde-esta-xxxx",
+    storageBucket: "donde-esta-xxxx.firebasestorage.app",
+    messagingSenderId: "1234567890",
+    appId: "1:1234567890:web:abcdef"
+  }
 };
 ```
 
 *Commit changes*. En un minuto la web se actualiza.
 
-> La *anon key* es pública por diseño: la seguridad la ponen las reglas del SQL (solo los usuarios aprobados ven los datos). **Nunca** pongas la `service_role`.
+> Estos datos son públicos por diseño (todas las webs con Firebase los llevan): la seguridad la ponen las reglas del paso 3, así que solo los usuarios que tú apruebes ven tus cosas.
 
 ### 5. Primer uso
 
 1. Abre tu web → **Crear cuenta**. **El primer usuario es el administrador.**
-2. Ve a **Ajustes → Inteligencia artificial**:
-   - Lo más fácil y gratis: **Google Gemini**. Saca una clave en [aistudio.google.com/apikey](https://aistudio.google.com/apikey), pégala, **Guardar** y **Probar**.
-   - También vale OpenAI, Claude o cualquier compatible (Groq, OpenRouter, Ollama…).
+2. **Ajustes → Inteligencia artificial**: lo más fácil y gratis es **Google Gemini**. Saca una clave en [aistudio.google.com/apikey](https://aistudio.google.com/apikey), pégala, **Guardar** y **Probar**. (También vale OpenAI, Claude o cualquier compatible.)
 3. Para añadir a tu familia: que abran la web y pulsen **Crear cuenta**. Les apruebas en **Ajustes → Usuarios**.
 4. En el móvil: menú del navegador → **Añadir a pantalla de inicio**, y queda como una app.
-
-### 6. Etiquetas QR
-
-**Etiquetas QR** → elige tamaño → **Imprimir** → recorta y pega en cada caja. Escanéalas con la cámara del móvil o con el botón central de la app: se abre la caja al momento.
+5. **Etiquetas QR** → elige tamaño → **Imprimir** → recorta y pega en cada caja.
 
 ---
 
 ## Preguntas rápidas
 
-- **¿Cuánto cuesta?** GitHub Pages y el plan gratis de Supabase cubren de sobra un uso doméstico. Gemini tiene plan gratuito.
-- **Supabase gratis "se duerme"** si no se usa en 1 semana: entra en supabase.com y pulsa *Restore*. No se pierde nada.
-- **¿Las fotos son privadas?** Se guardan con nombres aleatorios imposibles de adivinar, pero quien tenga el enlace exacto de una foto podría verla.
-- **La clave de la IA** solo la pueden leer los usuarios aprobados.
+- **¿Cuánto cuesta?** Nada. El plan gratis de Firebase (Spark) no pide tarjeta: 1 GB de datos y 50.000 lecturas al día, de sobra para casa.
+- **¿Se apaga si no lo uso?** No. Ni GitHub Pages ni Firebase se duermen.
+- **¿Dónde van las fotos?** Dentro de la propia base de datos, comprimidas (unos 100 KB cada una), así no hace falta ningún servicio de pago. Caben miles.
+- **¿Funciona sin internet?** Para consultar y guardar necesita conexión (en el bajo, aunque sea con datos móviles). Al abrirla te enseña al instante lo último que viste mientras se conecta.
+- **¿Y si abro la web sin configurar Firebase?** Arranca en **modo demo**: funciona igual pero los datos solo se guardan en ese navegador.
 - **Copia de seguridad**: Ajustes → Exportar.
 
 ---

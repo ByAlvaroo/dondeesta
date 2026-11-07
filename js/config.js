@@ -1,14 +1,20 @@
 // =====================================================================
-//  CONFIGURACIÓN  ·  rellena estos dos datos con los de TU proyecto Supabase
-//  (Supabase → Project Settings → API). Ver README.md, paso 2.
+//  CONFIGURACIÓN  ·  pega aquí el "firebaseConfig" de TU proyecto Firebase
+//  (Firebase → ⚙ Configuración del proyecto → Tus apps → Web). Ver README.md, paso 4.
 //
-//  Si los dejas vacíos, la app arranca en MODO DEMO: funciona entera,
+//  Si lo dejas vacío, la app arranca en MODO DEMO: funciona entera,
 //  pero los datos solo se guardan en el navegador donde la abras.
 //
-//  La "anon key" es pública por diseño: la seguridad la ponen las reglas
-//  (RLS) del archivo supabase/schema.sql. NUNCA pongas aquí la "service_role".
+//  Estos datos son públicos por diseño: la seguridad la ponen las reglas
+//  del archivo firestore.rules (solo los usuarios aprobados ven tus cosas).
 // =====================================================================
 window.DONDE_CONFIG = {
-  SUPABASE_URL: "",       // ej: "https://abcdefghijk.supabase.co"
-  SUPABASE_ANON_KEY: ""   // ej: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...."
+  FIREBASE: {
+    apiKey: "",
+    authDomain: "",
+    projectId: "",
+    storageBucket: "",
+    messagingSenderId: "",
+    appId: ""
+  }
 };
