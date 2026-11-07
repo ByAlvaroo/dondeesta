@@ -59,6 +59,7 @@
   const natCmp = (a, b) => String(a).localeCompare(String(b), "es", { numeric: true, sensitivity: "base" });
   function saveCache() { try { localStorage.setItem(CACHE, JSON.stringify({ me: S.me, data: S.data })); } catch (e) { } }
   const isAdmin = () => S.me && S.me.role === "admin";
+  const meName = () => (S.me && (S.me.name || S.me.username)) || "?";
   const shelfColor = s => (s && s.color) || "#64748b";
   const boxColor = b => (b && b.color) || shelfColor(IX.shelf[b && b.shelf_id]);
 
@@ -187,7 +188,7 @@
     return new Promise(res => { const i = document.createElement("input"); i.type = "file"; i.accept = "image/*"; if (capture) i.capture = "environment"; i.onchange = () => res(i.files[0] || null); i.click(); });
   }
   async function uploadPhoto(file) {
-    let img = await compress(file, DEMO ? 500 : 900, DEMO ? 0.7 : 0.72);
+    let img = await compress(file, 900, 0.72);
     if (img.url.length > 900000) img = await compress(file, 640, 0.6);
     return await db.uploadPhoto(img.blob);
   }
@@ -207,12 +208,17 @@
 
   /* ---------- arranque ---------- */
   async function boot() {
+    if (DEMO) {
+      $("#app").innerHTML = '<div class="auth"><div class="auth-card stack" style="text-align:center"><div class="brand"><span class="logo">' + ic("box") + '</span><span>¿Dónde está?</span></div>' +
+        '<div class="err-box">Falta conectar la base de datos.</div><p class="muted" style="margin:0">Pega la configuración de tu proyecto de Firebase en <b>js/config.js</b> (README, paso 4) y recarga la página.</p><div class="byline">HECHO POR <span>@BYALVARO__</span></div></div></div>';
+      return;
+    }
     try { const c = JSON.parse(localStorage.getItem(CACHE)); if (c && c.me && c.data) { S.me = c.me; S.data = c.data; index(); render(); } } catch (e) { }
     try {
       S.me = await db.session();
       if (S.me && S.me.role !== "pendiente") { S.data = await db.loadAll(); index(); saveCache(); }
       render();
-      if (!DEMO) db.onChange(liveReload);
+      db.onChange(liveReload);
     } catch (e) {
       if (!S.me) { $("#app").innerHTML = '<div class="auth"><div class="auth-card"><div class="err-box">No se pudo conectar: ' + esc(e.message) + '</div><p class="muted">Revisa la configuración de Firebase en js/config.js y tu conexión.</p><button class="btn pri" onclick="location.reload()">Reintentar</button></div></div>'; }
       else fail(e);
@@ -246,7 +252,7 @@
       '<div class="shell"><aside class="side">' + brand() +
       '<button class="nav-a" data-act="scan" style="background:var(--grad);color:#fff;margin-bottom:8px">' + ic("scan") + "Escanear QR</button>" +
       nav.map(n => '<a class="nav-a" data-nav="' + n[0] + '" href="#/' + n[0] + '">' + ic(n[1]) + n[2] + (n[3] ? '<span class="count">' + n[3] + "</span>" : "") + "</a>").join("") +
-      '<div class="grow"></div><div class="me"><div class="avatar">' + esc(S.me.username[0].toUpperCase()) + '</div><div style="flex:1;min-width:0"><b>' + esc(S.me.username) + "</b><span>" + (isAdmin() ? "Administrador" : "Usuario") + '</span></div><button class="btn icon sm ghost" title="Cerrar sesión" data-act="logout">' + ic("logout") + '</button></div><div class="byline">HECHO POR <span>@BYALVARO__</span></div></aside>' +
+      '<div class="grow"></div><div class="me"><div class="avatar">' + esc(meName()[0].toUpperCase()) + '</div><div style="flex:1;min-width:0"><b>' + esc(meName()) + "</b><span>" + (isAdmin() ? "Administrador" : "Usuario") + '</span></div><button class="btn icon sm ghost" title="Cerrar sesión" data-act="logout">' + ic("logout") + '</button></div><div class="byline">HECHO POR <span>@BYALVARO__</span></div></aside>' +
       '<div class="topbar">' + brand() + '<div class="sp"></div><a class="btn icon sm ghost" href="#/etiquetas" title="Etiquetas QR">' + ic("qr") + '</a><a class="btn icon sm ghost" href="#/ajustes" title="Ajustes">' + ic("settings") + "</a></div>" +
       '<main class="main" id="view"></main></div>' +
       '<nav class="bottomnav"><a data-nav="" href="#/">' + ic("home") + 'Inicio</a><a data-nav="plano" href="#/plano">' + ic("map") + 'Plano</a><button class="scan" data-act="scan" aria-label="Escanear QR">' + ic("scan") + '</button><a data-nav="sacar" href="#/sacar">' + ic("list") + "Sacar" + (pend ? '<i class="dot"></i>' : "") + '</a><a data-nav="etiquetas" href="#/etiquetas">' + ic("qr") + "Etiquetas</a></nav>";
@@ -261,10 +267,9 @@
     const pend = S.data.notes.filter(n => !n.done).length;
     $$('.nav-a[data-nav="sacar"] .count, .bottomnav .dot').forEach(x => x.remove());
     if (pend) { const a = $('.nav-a[data-nav="sacar"]'); if (a) a.insertAdjacentHTML("beforeend", '<span class="count">' + pend + "</span>"); const b = $('.bottomnav [data-nav="sacar"]'); if (b) b.insertAdjacentHTML("beforeend", '<i class="dot"></i>'); }
-    const demo = DEMO ? '<div class="demo-bar">' + ic("info") + "<span>Modo demo: los datos solo se guardan en este navegador. Conecta Firebase (README) para usarlo en todos tus dispositivos.</span></div>" : "";
     const views = { "": vHome, e: vShelf, c: vBox, plano: vMap, sacar: vNotes, etiquetas: vLabels, ajustes: vSettings };
     const fn = views[r.p] || vHome;
-    v.innerHTML = demo + fn(r.a) + '<div class="foot-by">HECHO POR <span>@BYALVARO__</span></div>';
+    v.innerHTML = fn(r.a) + '<div class="foot-by">HECHO POR <span>@BYALVARO__</span></div>';
     const after = AFTER[r.p || "home"]; if (after) after(r.a, soft);
   }
   const AFTER = {};
@@ -274,11 +279,10 @@
     mode = mode || "in";
     $("#app").innerHTML = '<div class="auth"><form class="auth-card stack" autocomplete="on">' +
       '<div class="brand"><span class="logo">' + ic("box") + '</span><span>¿Dónde está?<small style="font-size:13px;margin-top:4px">Todo lo de tu bajo, a un toque</small></span></div>' +
-      (DEMO ? '<div class="demo-bar" style="margin:0">' + ic("info") + "<span>Modo demo: crea cualquier usuario para probar. El primero será administrador.</span></div>" : "") +
       '<div class="tabs"><button type="button" class="' + (mode === "in" ? "on" : "") + '" data-m="in">Entrar</button><button type="button" class="' + (mode === "up" ? "on" : "") + '" data-m="up">Crear cuenta</button></div>' +
       '<div class="field"><label>Usuario</label><input class="inp" name="username" autocomplete="username" autocapitalize="none" required placeholder="p. ej. alvaro"></div>' +
       '<div class="field"><label>Contraseña</label><input class="inp" type="password" name="password" autocomplete="' + (mode === "in" ? "current-password" : "new-password") + '" required minlength="6" placeholder="Mínimo 6 caracteres"></div>' +
-      (mode === "up" ? '<p class="hint" style="margin:0">El primer usuario será el administrador. Los demás tendrán que ser aprobados por él.</p>' : "") +
+      (mode === "up" ? '<p class="hint" style="margin:0">Las cuentas nuevas tienen que ser aprobadas por el administrador (ByAlvaro).</p>' : "") +
       '<div class="err-box hidden"></div><button class="btn pri" style="height:50px">' + (mode === "in" ? "Entrar" : "Crear cuenta") + '</button>' +
       '<div class="byline">HECHO POR <span>@BYALVARO__</span></div></form></div>';
     const f = $(".auth-card");
@@ -291,13 +295,13 @@
         const u = f.username.value, p = f.password.value;
         S.me = mode === "in" ? await db.signIn(u, p) : await db.signUp(u, p);
         if (S.me && S.me.role !== "pendiente") { S.data = await db.loadAll(); index(); saveCache(); }
-        if (!DEMO) db.onChange(liveReload);
+        db.onChange(liveReload);
         render();
       } catch (err) { er.textContent = err.message; er.classList.remove("hidden"); btn.disabled = false; }
     };
   }
   function renderPending() {
-    $("#app").innerHTML = '<div class="auth"><div class="auth-card stack" style="text-align:center"><div class="brand"><span class="logo">' + ic("users") + '</span><span>Casi listo, ' + esc(S.me.username) + '</span></div>' +
+    $("#app").innerHTML = '<div class="auth"><div class="auth-card stack" style="text-align:center"><div class="brand"><span class="logo">' + ic("users") + '</span><span>Casi listo, ' + esc(meName()) + '</span></div>' +
       '<p class="muted" style="margin:0">Tu cuenta está <b>esperando aprobación</b>. Pide al administrador que te apruebe en <b>Ajustes → Usuarios</b>.</p>' +
       '<button class="btn pri" data-act="recheck">Ya me ha aprobado</button><button class="btn ghost" data-act="logout">Cerrar sesión</button><div class="byline">HECHO POR <span>@BYALVARO__</span></div></div></div>';
   }
@@ -495,7 +499,7 @@
   AFTER.sacar = function () {
     $("#noteform").onsubmit = async e => {
       e.preventDefault(); const t = $("#notetext").value.trim(); if (!t) return;
-      try { await ins("notes", { text: t, done: false, created_by: S.me.username }); renderView(); $("#notetext").focus(); } catch (er) { fail(er); }
+      try { await ins("notes", { text: t, done: false, created_by: meName() }); renderView(); $("#notetext").focus(); } catch (er) { fail(er); }
     };
   };
 
@@ -529,7 +533,7 @@
     const st = S.data.settings || {}, p = st.ai_provider || "gemini", adm = isAdmin();
     const dis = adm ? "" : "disabled";
     return '<div class="pagehead"><div class="grow"><h1>Ajustes</h1><p>Configuración común para todos los usuarios.</p></div></div><div class="settings">' +
-      '<section class="set-sec"><h2>' + ic("user") + 'Tu cuenta</h2><div class="row"><div class="avatar" style="width:48px;height:48px;font-size:20px">' + esc(S.me.username[0].toUpperCase()) + '</div><div class="grow" style="flex:1"><b style="font-size:17px">' + esc(S.me.username) + '</b><br><span class="muted">' + (adm ? "Administrador" : "Usuario") + '</span></div><button class="btn" data-act="logout">' + ic("logout") + "Salir</button></div>" +
+      '<section class="set-sec"><h2>' + ic("user") + 'Tu cuenta</h2><div class="row"><div class="avatar" style="width:48px;height:48px;font-size:20px">' + esc(meName()[0].toUpperCase()) + '</div><div class="grow" style="flex:1"><b style="font-size:17px">' + esc(meName()) + '</b><br><span class="muted">' + (adm ? "Administrador" : "Usuario") + '</span></div><button class="btn" data-act="logout">' + ic("logout") + "Salir</button></div>" +
       '<p class="hint" style="margin:0">Consejo: en el móvil abre el menú del navegador → «Añadir a pantalla de inicio» y tendrás la app como una más.</p></section>' +
       '<section class="set-sec" id="aisec"><h2>' + ic("sparkles") + "Inteligencia artificial</h2>" + (adm ? "" : '<div class="ok-box">' + (st.ai_key || p === "compatible" ? "La IA está configurada por el administrador." : "Pide al administrador que configure la IA.") + "</div>") +
       '<div class="field"><label>Proveedor</label><select class="inp" id="ai_provider" ' + dis + ">" + Object.keys(AI.names).map(k => '<option value="' + k + '" ' + (k === p ? "selected" : "") + ">" + AI.names[k] + "</option>").join("") + "</select></div>" +
@@ -552,9 +556,9 @@
     const box = $("#userlist"); if (!box) return;
     try {
       const us = await db.listProfiles();
-      box.innerHTML = us.map(u => '<div class="user-row" style="' + (u.role === "pendiente" ? "border-color:rgba(251,191,36,.4)" : "") + '"><div class="avatar">' + esc(u.username[0].toUpperCase()) + '</div><div class="grow"><b>' + esc(u.username) + "</b>" + (u.id === S.me.id ? ' <span class="hint">(tú)</span>' : "") + "<br>" + (u.role === "pendiente" ? '<span class="tag res">Pendiente</span>' : '<span class="hint">' + (u.role === "admin" ? "Administrador" : "Usuario") + "</span>") + "</div>" +
+      box.innerHTML = us.map(u => '<div class="user-row" style="' + (u.role === "pendiente" ? "border-color:rgba(251,191,36,.4)" : "") + '"><div class="avatar">' + esc((u.name || u.username)[0].toUpperCase()) + '</div><div class="grow"><b>' + esc(u.name || u.username) + "</b>" + (u.id === S.me.id ? ' <span class="hint">(tú)</span>' : "") + "<br>" + (u.role === "pendiente" ? '<span class="tag res">Pendiente</span>' : '<span class="hint">' + (u.role === "admin" ? "Administrador" : "Usuario") + "</span>") + "</div>" +
         (u.id === S.me.id ? "" : (u.role === "pendiente" ? '<button class="btn sm pri" data-act="setrole" data-id="' + u.id + '" data-role="usuario">' + ic("check") + "Aprobar</button>" : '<select class="inp" data-role-sel="' + u.id + '"><option value="usuario" ' + (u.role === "usuario" ? "selected" : "") + '>Usuario</option><option value="admin" ' + (u.role === "admin" ? "selected" : "") + '>Admin</option><option value="pendiente">Bloquear</option></select>') +
-          '<button class="btn icon sm ghost" data-act="deluser" data-id="' + u.id + '" data-name="' + esc(u.username) + '">' + ic("trash") + "</button>") + "</div>").join("");
+          '<button class="btn icon sm ghost" data-act="deluser" data-id="' + u.id + '" data-name="' + esc(u.name || u.username) + '">' + ic("trash") + "</button>") + "</div>").join("");
       $$("[data-role-sel]", box).forEach(s => s.onchange = async () => { try { await db.setRole(s.dataset.roleSel, s.value); toast("Rol actualizado"); loadUsers(); } catch (e) { fail(e); } });
     } catch (e) { box.innerHTML = '<div class="err-box">' + esc(e.message) + "</div>"; }
   }
@@ -679,7 +683,7 @@
   }
   async function addNote(it) {
     if (S.data.notes.some(n => !n.done && n.item_id === it.id)) return toast("Ya está en «para sacar»");
-    try { await ins("notes", { text: it.name, item_id: it.id, done: false, created_by: S.me.username }); toast("Añadido a «para sacar»"); renderView(true); } catch (e) { fail(e); }
+    try { await ins("notes", { text: it.name, item_id: it.id, done: false, created_by: meName() }); toast("Añadido a «para sacar»"); renderView(true); } catch (e) { fail(e); }
   }
 
   /* ---------- foto + IA ---------- */

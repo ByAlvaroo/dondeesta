@@ -19,7 +19,7 @@ La web vive en **GitHub Pages** y los datos en **Firebase** (de Google). Las dos
 - **Plano del bajo**: coloca las estanterías como en la realidad; al buscar se ilumina dónde está.
 - **QR por caja**: se crean al instante, se imprimen en hoja y al escanear se abre la caja directamente.
 - **Para sacar**: lista de notas que te dice en qué caja está cada cosa.
-- **Usuarios con contraseña**: el primero es administrador y aprueba a los demás. La IA se configura una vez para todos.
+- **Usuarios con contraseña**: el administrador es **ByAlvaro** y aprueba a los demás. La IA se configura una vez para todos.
 - **Tiempo real**: lo que cambia uno aparece al momento en el resto de móviles y ordenadores.
 - **Empieza vacía**: al crear tu cuenta no hay nada; tú creas tus estanterías.
 
@@ -69,7 +69,7 @@ window.DONDE_CONFIG = {
 
 ### 5. Primer uso
 
-1. Abre tu web → **Crear cuenta**. **El primer usuario es el administrador.**
+1. Abre tu web → **Crear cuenta** con usuario **ByAlvaro** y tu contraseña. Esa cuenta es la **administradora** (solo ella puede serlo). Créala nada más publicar la web.
 2. **Ajustes → Inteligencia artificial**: lo más fácil y gratis es **Google Gemini**. Saca una clave en [aistudio.google.com/apikey](https://aistudio.google.com/apikey), pégala, **Guardar** y **Probar**. (También vale OpenAI, Claude o cualquier compatible.)
 3. Para añadir a tu familia: que abran la web y pulsen **Crear cuenta**. Les apruebas en **Ajustes → Usuarios**.
 4. En el móvil: menú del navegador → **Añadir a pantalla de inicio**, y queda como una app.
@@ -83,7 +83,7 @@ window.DONDE_CONFIG = {
 - **¿Se apaga si no lo uso?** No. Ni GitHub Pages ni Firebase se duermen.
 - **¿Dónde van las fotos?** Dentro de la propia base de datos, comprimidas (unos 100 KB cada una), así no hace falta ningún servicio de pago. Caben miles.
 - **¿Funciona sin internet?** Para consultar y guardar necesita conexión (en el bajo, aunque sea con datos móviles). Al abrirla te enseña al instante lo último que viste mientras se conecta.
-- **¿Y si abro la web sin configurar Firebase?** Arranca en **modo demo**: funciona igual pero los datos solo se guardan en ese navegador.
+- **¿Y si abro la web sin configurar Firebase?** Te avisa de que falta el paso 4.
 - **Copia de seguridad**: Ajustes → Exportar.
 
 ---

@@ -1,10 +1,11 @@
-/* ¿DÓNDE ESTÁ? · datos (Firebase o modo demo) + IA · HECHO POR @BYALVARO__ */
+/* ¿DÓNDE ESTÁ? · datos en Firebase + IA · HECHO POR @BYALVARO__ */
 (function () {
   "use strict";
   const CFG = window.DONDE_CONFIG || {};
   const FB = CFG.FIREBASE || {};
-  const DEMO = !FB.apiKey || !FB.projectId;
+  const DEMO = !FB.apiKey || !FB.projectId;   // true = falta pegar la configuración de Firebase
   const EMAIL_DOMAIN = "dondeesta.app";
+  const ADMIN_USER = "byalvaro";   // la única cuenta que es administradora (también en firestore.rules)
   const SDK = CFG.FIREBASE_SDK || "https://www.gstatic.com/firebasejs/11.0.2/";
   const COLS = ["shelves", "boxes", "items", "notes"];
 
@@ -18,56 +19,6 @@
   function checkCreds(name, pass) {
     if (name.length < 3) throw new Error("El usuario debe tener al menos 3 letras o números");
     if (String(pass).length < 6) throw new Error("La contraseña debe tener al menos 6 caracteres");
-  }
-
-  /* =================== MODO DEMO (localStorage) =================== */
-  function LocalBackend() {
-    const KEY = "de_demo_v2", SKEY = "de_demo_session";
-    let db;
-    try { db = JSON.parse(localStorage.getItem(KEY)); } catch (e) { db = null; }
-    if (!db) db = { users: [], shelves: [], boxes: [], items: [], notes: [], settings: Object.assign({ id: 1 }, DEFAULT_SETTINGS) };
-    const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { console.warn(e); throw new Error("No queda espacio en este navegador (modo demo)"); } };
-    save();
-    const strip = u => u && ({ id: u.id, username: u.username, role: u.role, created_at: u.created_at });
-    const clone = o => JSON.parse(JSON.stringify(o));
-    return {
-      demo: true,
-      async session() { const id = localStorage.getItem(SKEY); return strip(db.users.find(u => u.id === id)); },
-      async signIn(user, pass) {
-        const u = db.users.find(x => x.username === normUser(user));
-        if (!u || u.pass !== pass) throw new Error("Usuario o contraseña incorrectos");
-        localStorage.setItem(SKEY, u.id); return strip(u);
-      },
-      async signUp(user, pass) {
-        const name = normUser(user); checkCreds(name, pass);
-        if (db.users.some(x => x.username === name)) throw new Error("Ese usuario ya existe");
-        const u = { id: uid(), username: name, pass, role: db.users.length ? "pendiente" : "admin", created_at: now() };
-        db.users.push(u); save(); localStorage.setItem(SKEY, u.id); return strip(u);
-      },
-      async signOut() { localStorage.removeItem(SKEY); },
-      async loadAll() { return clone({ shelves: db.shelves, boxes: db.boxes, items: db.items, notes: db.notes, settings: db.settings }); },
-      async insert(t, row) { const r = Object.assign({ id: uid(), created_at: now() }, row); db[t].push(r); save(); return clone(r); },
-      async update(t, id, patch) {
-        const r = db[t].find(x => x.id === id); if (!r) throw new Error("No encontrado");
-        Object.assign(r, patch); save(); return clone(r);
-      },
-      async remove(t, id) {
-        db[t] = db[t].filter(x => x.id !== id);
-        if (t === "boxes") { const gone = new Set(db.items.filter(i => i.box_id === id).map(i => i.id)); db.items = db.items.filter(i => i.box_id !== id); db.notes.forEach(n => { if (gone.has(n.item_id)) n.item_id = null; }); }
-        if (t === "shelves") db.boxes.forEach(b => { if (b.shelf_id === id) b.shelf_id = null; });
-        if (t === "items") db.notes.forEach(n => { if (n.item_id === id) n.item_id = null; });
-        save();
-      },
-      async upsertMany(t, rows) { const ids = new Set(rows.map(r => r.id)); db[t] = db[t].filter(r => !ids.has(r.id)).concat(rows); save(); },
-      async uploadPhoto(blob) { return await blobToDataURL(blob); },
-      async getPhoto(url) { return url; },
-      async deletePhoto() { },
-      async listProfiles() { return db.users.map(strip); },
-      async setRole(id, role) { const u = db.users.find(x => x.id === id); if (u) u.role = role; save(); },
-      async deleteProfile(id) { db.users = db.users.filter(u => u.id !== id); save(); },
-      async saveSettings(patch) { Object.assign(db.settings, patch); save(); return clone(db.settings); },
-      onChange() { }
-    };
   }
 
   /* =================== FIREBASE (nube gratis, siempre activa) =================== */
@@ -107,16 +58,10 @@
       const s = await F.S.getDoc(d("profiles", u.uid));
       return s.exists() ? Object.assign({ id: u.uid }, s.data()) : null;
     }
-    // Crea el perfil: el primer usuario de todos es admin; el resto, pendiente.
-    async function createProfile(u, name) {
-      const setup = await F.S.getDoc(d("meta", "setup"));
-      const b = F.S.writeBatch(F.fs);
-      const first = !setup.exists();
-      const p = { username: name, role: first ? "admin" : "pendiente", created_at: now() };
-      b.set(d("profiles", u.uid), p);
-      if (first) b.set(d("meta", "setup"), { admin: u.uid, created_at: now() });
-      try { await b.commit(); }
-      catch (e) { if (!first) throw e; p.role = "pendiente"; await F.S.setDoc(d("profiles", u.uid), p); }
+    // Crea el perfil: «byalvaro» es el administrador; el resto queda pendiente de aprobación.
+    async function createProfile(u, name, display) {
+      const p = { username: name, name: String(display || name).trim().slice(0, 40), role: name === ADMIN_USER ? "admin" : "pendiente", created_at: now() };
+      await F.S.setDoc(d("profiles", u.uid), p);
       return Object.assign({ id: u.uid }, p);
     }
 
@@ -156,13 +101,13 @@
       signIn: wrap(async function (user, pass) {
         await fb();
         const r = await F.A.signInWithEmailAndPassword(F.auth, normUser(user) + "@" + EMAIL_DOMAIN, pass);
-        return (await profile(r.user)) || (await createProfile(r.user, normUser(user)));
+        return (await profile(r.user)) || (await createProfile(r.user, normUser(user), user));
       }),
       signUp: wrap(async function (user, pass) {
         const name = normUser(user); checkCreds(name, pass);
         await fb();
         const r = await F.A.createUserWithEmailAndPassword(F.auth, name + "@" + EMAIL_DOMAIN, pass);
-        return await createProfile(r.user, name);
+        return await createProfile(r.user, name, user);
       }),
       signOut: wrap(async function () { await fb(); stopLive(); photoCache.clear(); await F.A.signOut(F.auth); }),
       loadAll: wrap(async function () {
@@ -343,5 +288,5 @@
     }
   };
 
-  window.DE = { DEMO, db: DEMO ? LocalBackend() : FireBackend(), AI, uid, newCode, normUser, blobToDataURL };
+  window.DE = { DEMO, db: FireBackend(), AI, uid, newCode, normUser, blobToDataURL };
 })();
