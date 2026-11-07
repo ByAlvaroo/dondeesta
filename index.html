@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Cache-Control" content="no-cache">
+
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>¿Dónde está?</title>
 <meta name="description" content="Encuentra cualquier cosa de tu bajo: estanterías, cajas y objetos. HECHO POR @BYALVARO__">
@@ -16,15 +16,35 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=1.0.1">
+<link rel="stylesheet" href="css/app.css?v=1.0.2">
 </head>
 <body>
 <div id="app"><div class="splash"><div class="spin"></div></div></div>
 <div id="print-area"></div>
 <div class="toasts" id="toasts"></div>
-<script src="js/config.js?v=1.0.1"></script>
-<script src="js/qr.js?v=1.0.1"></script>
-<script src="js/data.js?v=1.0.1"></script>
-<script src="js/app.js?v=1.0.1"></script>
+<script>
+/* Lee js/config.js como texto y saca el firebaseConfig, lo pegues como lo pegues
+   (con o sin las líneas de import/initializeApp que da Firebase). */
+(function () {
+  var V = "1.0.2";
+  function load(src) { return new Promise(function (ok, ko) { var s = document.createElement("script"); s.src = src + "?v=" + V; s.onload = ok; s.onerror = ko; document.body.appendChild(s); }); }
+  function pick(txt) {
+    txt = txt.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    var m = txt.match(/firebaseConfig\s*=\s*(\{[\s\S]*?\})\s*;?/) || txt.match(/FIREBASE\s*:\s*(\{[\s\S]*?\})/);
+    if (!m) return null;
+    try { return Function('"use strict";return (' + m[1] + ")")(); } catch (e) { return null; }
+  }
+  fetch("js/config.js?v=" + V + "&t=" + Date.now(), { cache: "no-store" })
+    .then(function (r) { return r.ok ? r.text() : ""; })
+    .catch(function () { return ""; })
+    .then(function (txt) {
+      var fb = pick(txt || "");
+      window.DONDE_CONFIG = { FIREBASE: fb || {} };
+      return load("js/qr.js");
+    })
+    .then(function () { return load("js/data.js"); })
+    .then(function () { return load("js/app.js"); });
+})();
+</script>
 </body>
 </html>

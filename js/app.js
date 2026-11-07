@@ -6,7 +6,7 @@
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const COLORS = ["#8b5cf6", "#ef4444", "#f97316", "#f59e0b", "#22c55e", "#14b8a6", "#06b6d4", "#3b82f6", "#ec4899", "#64748b"];
-  const CACHE = "de_cache_v2", VERSION = "1.0.1";
+  const CACHE = "de_cache_v2", VERSION = "1.0.2";
   ["de_cache_v1", "de_demo_v1", "de_demo_v2", "de_demo_session"].forEach(k => { try { localStorage.removeItem(k); } catch (e) { } });
 
   /* ---------- iconos ---------- */
