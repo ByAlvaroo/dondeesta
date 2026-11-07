@@ -1,0 +1,11 @@
+{
+  "name": "¿Dónde está?",
+  "short_name": "Dónde está",
+  "description": "Inventario de tu bajo: estanterías, cajas y objetos. HECHO POR @BYALVARO__",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#090b10",
+  "theme_color": "#090b10",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
